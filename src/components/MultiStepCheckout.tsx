@@ -625,29 +625,6 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                   )}
                 </div>
 
-                {/* Boleto */}
-                <div
-                  onClick={() => onPaymentMethodChange('boleto')}
-                  className={`rounded-xl border transition-all cursor-pointer overflow-hidden ${
-                    paymentMethod === 'boleto' ? 'border-neutral-900 ring-2 ring-neutral-900/10' : 'border-neutral-200 hover:border-neutral-300'
-                  }`}
-                >
-                  <div className="p-4 flex items-center gap-3">
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                        paymentMethod === 'boleto' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 bg-white'
-                      }`}
-                    >
-                      {paymentMethod === 'boleto' && <div className="w-2 h-2 rounded-full bg-white" />}
-                    </div>
-                    <div className="w-7 h-7 rounded-lg bg-neutral-100 text-neutral-700 flex items-center justify-center">
-                      <Barcode className="w-4 h-4" />
-                    </div>
-                    <span className="font-bold text-sm text-neutral-900">Boleto Bancário</span>
-                  </div>
-                </div>
-              </div>
-
               {/* Navigation & Submit */}
               <div className="pt-6 space-y-4">
                 <div className="flex items-center gap-3">
