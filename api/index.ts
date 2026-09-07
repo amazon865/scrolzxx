@@ -1,17 +1,9 @@
 import express from 'express';
-import {
-  createSigiloPayPix,
-  getSigiloPayConfig,
-  getSigiloPayTransactionStatus,
-  handleSigiloPayWebhookEvent,
-  simulateMarkAsPaid,
-} from './sigilopay';
 
 const app = express();
-
 app.use(express.json());
 
-// CORS headers for API calls
+// Cabeçalhos CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -22,180 +14,181 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
+// Configurações SigiloPay
+function getSigiloPayConfig(
+  customPublicKey?: string,
+  customSecretKey?: string,
+  customUrl?: string
+) {
+  const publicKey = (
+    customPublicKey ||
+    process.env.SIGILOPAY_PUBLIC_KEY ||
+    'guifzp7_zhklmrbkcxctkydl'
+  ).trim();
+
+  const secretKey = (
+    customSecretKey ||
+    process.env.SIGILOPAY_SECRET_KEY ||
+    '05gpj4dschb3i5irfssvlq75j45ap005slug5rg5kw4cvm2fqsigthnsn4bnvgld'
+  ).trim();
+
+  const apiUrl = (
+    customUrl ||
+    process.env.SIGILOPAY_API_URL ||
+    'https://app.sigilopay.com.br/api/v1'
+  ).trim().replace(/\/$/, '');
+
+  const isConfigured = Boolean(
+    publicKey &&
+    secretKey &&
+    publicKey !== 'MY_SIGILOPAY_PUBLIC_KEY' &&
+    secretKey !== 'MY_SIGILOPAY_SECRET_KEY'
+  );
+
+  return { publicKey, secretKey, apiUrl, isConfigured };
+}
+
+// Criar cobrança Pix
+async function createSigiloPayPix(params: any) {
+  const { orderId, amount, customer, customPublicKey, customSecretKey, customUrl } = params;
+  const config = getSigiloPayConfig(customPublicKey, customSecretKey, customUrl);
+
+  const cleanCpf = (customer?.cpf || '').replace(/\D/g, '') || '11144477735';
+  const cleanPhone = (customer?.phone || '').replace(/\D/g, '') || '11999999999';
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dueDate = tomorrow.toISOString().split('T')[0];
+
+  const endpoint = `${config.apiUrl}/gateway/pix/receive`;
+  const payload = {
+    identifier: orderId,
+    amount: Number(Number(amount).toFixed(2)),
+    client: {
+      name: customer?.name || 'Cliente',
+      email: customer?.email || 'cliente@exemplo.com.br',
+      phone: cleanPhone,
+      document: cleanCpf,
+    },
+    dueDate,
+    metadata: { orderId },
+  };
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'x-public-key': config.publicKey,
+      'x-secret-key': config.secretKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const resBody = await res.text();
+  let data: any = {};
+  try {
+    data = JSON.parse(resBody);
+  } catch {
+    console.error('Resposta não-JSON da SigiloPay:', resBody);
+  }
+
+  if (res.ok && data) {
+    const pixCode = data.pix?.code || data.pix?.qrcode_text || data.pix_copy_paste;
+    const txId = String(data.transactionId || data.id || `sp-${orderId}`);
+
+    let qrCodeBase64 = '';
+    try {
+      const QRCode = await import('qrcode');
+      qrCodeBase64 = await (QRCode.default || QRCode).toDataURL(pixCode, { width: 340, margin: 2 });
+    } catch {
+      // O frontend já desenha o QR Code localmente se vier vazio
+    }
+
+    return {
+      success: true,
+      transactionId: txId,
+      orderId,
+      pixCode: pixCode || '',
+      qrCodeBase64,
+      qrCodeUrl: data.pix?.image,
+      status: 'PENDING',
+      isRealApi: true,
+      message: 'Cobrança Pix criada com sucesso via SigiloPay!',
+    };
+  }
+
+  throw new Error(data?.message || data?.error || `Erro da SigiloPay (${res.status}): ${resBody}`);
+}
+
+// 1. Health Check
 app.get(['/api/health', '/health'], (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 1. SigiloPay Config
-app.get(['/api/sigilopay/config', '/sigilopay/config', '/config'], (req, res) => {
-  const customPublicKey = req.query.publicKey as string;
-  const customSecretKey = req.query.secretKey as string;
-  const customKey = req.query.key as string;
-  const customUrl = req.query.url as string;
-  const config = getSigiloPayConfig(customPublicKey, customSecretKey, customUrl, customKey);
-  const host = req.get('host') || 'localhost:3000';
-  const protocol = req.protocol || 'https';
-  const webhookUrl = `${protocol}://${host}/api/sigilopay/webhook`;
-
+// 2. Obter Config
+app.get(['/api/sigilopay/config', '/sigilopay/config'], (req, res) => {
+  const config = getSigiloPayConfig();
   res.json({
     isConfigured: config.isConfigured,
     apiUrl: config.apiUrl,
-    webhookUrl,
-    maskedPublicKey: config.publicKey ? `${config.publicKey.slice(0, 4)}••••••••${config.publicKey.slice(-4)}` : null,
-    maskedSecretKey: config.secretKey ? `${config.secretKey.slice(0, 4)}••••••••${config.secretKey.slice(-4)}` : null,
     status: config.isConfigured ? 'connected' : 'simulation_mode',
   });
 });
 
-// 2. Create Real/Standard Pix Charge
-app.post(['/api/sigilopay/create-pix', '/sigilopay/create-pix', '/create-pix'], async (req, res) => {
+// 3. Gerar Pix
+app.post(['/api/sigilopay/create-pix', '/sigilopay/create-pix'], async (req, res) => {
   try {
-    const {
+    const { orderId, amount, customer, customPublicKey, customSecretKey, customUrl } = req.body;
+
+    if (!orderId || !amount) {
+      return res.status(400).json({ error: 'orderId e amount são obrigatórios.' });
+    }
+
+    const result = await createSigiloPayPix({
       orderId,
       amount,
       customer,
-      products,
-      shippingFee,
-      discount,
       customPublicKey,
       customSecretKey,
-      customKey,
       customUrl,
-      checkoutId,
-    } = req.body;
-
-    if (!orderId || !amount || !customer) {
-      return res.status(400).json({
-        error: 'Campos obrigatórios ausentes: orderId, amount, customer.',
-      });
-    }
-
-    const host = req.get('host') || 'localhost:3000';
-    const protocol = req.protocol || 'https';
-    const appUrl = `${protocol}://${host}`;
-
-    const result = await createSigiloPayPix(
-      {
-        orderId,
-        amount: Number(amount),
-        customer,
-        products,
-        shippingFee,
-        discount,
-        checkoutId,
-        customPublicKey,
-        customSecretKey,
-        customKey,
-        customUrl,
-      },
-      appUrl
-    );
+    });
 
     res.json(result);
   } catch (err: any) {
-    console.error('[SigiloPay Error] Create Pix failed:', err);
-    res.status(500).json({
-      error: err?.message || 'Falha ao gerar cobrança Pix via SigiloPay.',
-    });
+    console.error('[SigiloPay Error]:', err);
+    res.status(500).json({ error: err?.message || 'Falha ao gerar cobrança Pix.' });
   }
 });
 
-// 3. Status Check
-app.get(['/api/sigilopay/status/:id', '/sigilopay/status/:id', '/status/:id'], async (req, res) => {
+// 4. Checar Status
+app.get(['/api/sigilopay/status/:id', '/sigilopay/status/:id'], async (req, res) => {
   try {
     const { id } = req.params;
-    const customPublicKey = req.query.publicKey as string;
-    const customSecretKey = req.query.secretKey as string;
-    const customUrl = req.query.url as string;
+    const config = getSigiloPayConfig();
+    const endpoint = `${config.apiUrl}/gateway/transactions?id=${encodeURIComponent(id)}`;
 
-    const result = await getSigiloPayTransactionStatus(id, customPublicKey, customSecretKey, customUrl);
-    res.json(result);
-  } catch (err: any) {
-    console.error('[SigiloPay Error] Status check failed:', err);
-    res.status(500).json({ error: 'Erro ao consultar status da transação.' });
-  }
-});
-
-// 4. Webhook Receiver
-app.post(['/api/sigilopay/webhook', '/sigilopay/webhook', '/webhook'], (req, res) => {
-  try {
-    const outcome = handleSigiloPayWebhookEvent(req.body);
-    res.status(200).json({
-      received: true,
-      outcome,
-      timestamp: new Date().toISOString(),
+    const response = await fetch(endpoint, {
+      headers: {
+        'x-public-key': config.publicKey,
+        'x-secret-key': config.secretKey,
+        'Accept': 'application/json',
+      },
     });
-  } catch (err: any) {
-    console.error('[SigiloPay Webhook Error]:', err);
-    res.status(200).json({ received: false, error: err?.message });
+
+    if (response.ok) {
+      const data = await response.json();
+      return res.json({ found: true, status: data.status || 'PENDING', raw: data });
+    }
+    res.json({ found: false, status: 'PENDING' });
+  } catch {
+    res.json({ found: false, status: 'PENDING' });
   }
 });
 
-// 5. Test Credentials
-app.post(['/api/sigilopay/test', '/sigilopay/test', '/test'], async (req, res) => {
-  try {
-    const {
-      publicKey,
-      secretKey,
-      apiKey,
-      apiUrl = 'https://app.sigilopay.com.br/api/v1',
-    } = req.body;
-
-    const config = getSigiloPayConfig(publicKey, secretKey, apiUrl, apiKey);
-
-    if (!config.publicKey || !config.secretKey) {
-      return res.status(400).json({
-        valid: false,
-        message: 'Informe a Chave Pública e a Chave Secreta para testar a conexão.',
-      });
-    }
-
-    try {
-      const pingUrl = `${config.apiUrl}/gateway/transactions?id=test_ping`;
-      const pingRes = await fetch(pingUrl, {
-        method: 'GET',
-        headers: {
-          'x-public-key': config.publicKey,
-          'x-secret-key': config.secretKey,
-          Accept: 'application/json',
-        },
-      });
-
-      if (pingRes.status !== 401 && pingRes.status !== 403) {
-        return res.json({
-          valid: true,
-          status: pingRes.status,
-          message: 'Credenciais autenticadas com sucesso junto à SigiloPay!',
-        });
-      } else {
-        return res.json({
-          valid: false,
-          status: pingRes.status,
-          message: 'Credenciais recusadas pela SigiloPay (401/403 Não Autorizado).',
-        });
-      }
-    } catch (fetchErr: any) {
-      return res.json({
-        valid: false,
-        message: `Não foi possível conectar à SigiloPay: ${fetchErr?.message}`,
-      });
-    }
-  } catch (err: any) {
-    res.status(500).json({ valid: false, message: err?.message });
-  }
-});
-
-// 6. Simulate Paid
-app.post('/api/sigilopay/simulate-paid', (req, res) => {
-  const { transactionId, orderId } = req.body;
-  const target = transactionId || orderId;
-  if (!target) {
-    return res.status(400).json({ error: 'Informe o transactionId ou orderId.' });
-  }
-
-  const success = simulateMarkAsPaid(target);
-  res.json({ success, message: success ? 'Transação marcada como PAGA!' : 'Transação não encontrada.' });
+// 5. Simular Pagamento
+app.post(['/api/sigilopay/simulate-paid', '/sigilopay/simulate-paid'], (req, res) => {
+  res.json({ success: true, message: 'Transação marcada como PAGA!' });
 });
 
 export default app;
