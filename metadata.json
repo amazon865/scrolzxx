@@ -1,0 +1,6 @@
+{
+  "name": "Checkout & Painel de Pagamentos Pix SigiloPay",
+  "description": "Sistema completo de checkout de alta conversão integrado com gateway SigiloPay para cobranças Pix reais com baixa automática, além de painel de coleta e construtor com IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
