@@ -5,7 +5,7 @@ import {
   getSigiloPayTransactionStatus,
   handleSigiloPayWebhookEvent,
   simulateMarkAsPaid,
-} from '../server/sigilopay';
+} from './sigilopay';
 
 const app = express();
 
