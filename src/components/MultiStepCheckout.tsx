@@ -13,23 +13,17 @@ import {
   formatCEP,
   formatCardNumber,
   formatExpiry,
-  detectCardBrand,
 } from '../utils/formatters';
 import {
-  User,
-  MapPin,
-  CreditCard,
   QrCode,
-  Barcode,
-  ArrowRight,
-  ArrowLeft,
-  Check,
-  ShieldCheck,
+  CreditCard,
   Lock,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
   Minus,
   Plus,
-  Truck,
-  CheckCircle2,
 } from 'lucide-react';
 
 interface MultiStepCheckoutProps {
@@ -72,10 +66,9 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [couponInput, setCouponInput] = useState('');
   const [couponFeedback, setCouponFeedback] = useState<string | null>(null);
-  const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [isSearchingCep, setIsSearchingCep] = useState(false);
 
-  // Subtotal & Shipping calculation
+  // Subtotal & Shipping
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const freeThreshold = config.shipping?.freeShippingThreshold ?? 350;
   const standardShipping = config.shipping?.price ?? 19.9;
@@ -90,7 +83,6 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
   const finalTotal = Math.max(0, subtotal - couponDiscountAmount - pixDiscountAmount + shippingPrice);
   const pixTotal = Math.max(0, subtotal - couponDiscountAmount - ((subtotal - couponDiscountAmount) * pixDiscountPct) / 100 + shippingPrice);
 
-  // CEP lookup
   const handleCepBlur = async () => {
     const raw = (customer.zipCode || '').replace(/\D/g, '');
     if (raw.length === 8) {
@@ -111,45 +103,9 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
           }
         }
       } catch {
-        // Ignore
+        // Ignored
       }
       setIsSearchingCep(false);
-    }
-  };
-
-  const validateStep1 = () => {
-    const errs: Record<string, string> = {};
-    if (!customer.name.trim()) errs.name = 'Informe seu nome completo';
-    if (!customer.email.trim() || !customer.email.includes('@')) errs.email = 'E-mail inválido';
-    if (!customer.phone.trim()) errs.phone = 'Informe seu telefone WhatsApp';
-    if (!customer.cpf.trim() || customer.cpf.replace(/\D/g, '').length < 11) errs.cpf = 'CPF incompleto';
-
-    setStepErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const validateStep2 = () => {
-    const errs: Record<string, string> = {};
-    if (!customer.zipCode.trim() || customer.zipCode.replace(/\D/g, '').length < 8) errs.zipCode = 'CEP inválido';
-    if (!customer.street.trim()) errs.street = 'Informe o endereço';
-    if (!customer.number.trim()) errs.number = 'Informe o número';
-    if (!customer.neighborhood.trim()) errs.neighborhood = 'Informe o bairro';
-
-    setStepErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleNextStep = () => {
-    if (currentStep === 1) {
-      if (validateStep1()) {
-        setCurrentStep(2);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } else if (currentStep === 2) {
-      if (validateStep2()) {
-        setCurrentStep(3);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
     }
   };
 
@@ -158,7 +114,7 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
     const clean = couponInput.trim().toUpperCase();
     if (!clean) return;
     onApplyCoupon(clean);
-    setCouponFeedback(`Cupom ${clean} aplicado com sucesso!`);
+    setCouponFeedback(`Cupom ${clean} aplicado!`);
     setCouponInput('');
   };
 
@@ -179,75 +135,72 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
     };
   });
 
+  const validateStep1 = () => {
+    if (!customer.email || !customer.name || !customer.phone || !customer.cpf) {
+      alert('Por favor, preencha todos os campos obrigatórios de contato.');
+      return false;
+    }
+    return true;
+  };
+
+  const validateStep2 = () => {
+    if (!customer.zipCode || !customer.street || !customer.number || !customer.neighborhood || !customer.city || !customer.state) {
+      alert('Por favor, preencha todos os campos obrigatórios de entrega.');
+      return false;
+    }
+    return true;
+  };
+
   return (
-    <div className="w-full max-w-5xl mx-auto py-4 sm:py-8">
-      {/* Wizard Progress Bar */}
+    <div className="w-full max-w-5xl mx-auto py-6 sm:py-10">
+      {/* Progress Stepper */}
       <div className="mb-8">
-        <div className="flex items-center justify-between max-w-md mx-auto relative px-4">
-          <div className="absolute top-1/2 left-8 right-8 h-1 bg-neutral-200 -translate-y-1/2 z-0" />
+        <div className="flex items-center justify-between max-w-lg mx-auto relative">
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 w-full bg-neutral-200 -z-10" />
           <div
-            className="absolute top-1/2 left-8 h-1 bg-emerald-600 -translate-y-1/2 transition-all duration-300 z-0"
-            style={{
-              width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%',
-            }}
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-neutral-900 transition-all duration-300 -z-10"
+            style={{ width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%' }}
           />
 
-          {/* Step 1 */}
-          <button
-            type="button"
-            onClick={() => setCurrentStep(1)}
-            className="relative z-10 flex flex-col items-center cursor-pointer"
-          >
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                currentStep >= 1 ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border-2 border-neutral-300 text-neutral-400'
-              }`}
-            >
-              {currentStep > 1 ? <Check className="w-4 h-4 stroke-[3]" /> : '1'}
-            </div>
-            <span className="text-xs font-bold text-neutral-800 mt-1.5">Identificação</span>
-          </button>
-
-          {/* Step 2 */}
-          <button
-            type="button"
-            onClick={() => {
-              if (validateStep1()) setCurrentStep(2);
-            }}
-            className="relative z-10 flex flex-col items-center cursor-pointer"
-          >
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                currentStep >= 2 ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border-2 border-neutral-300 text-neutral-400'
-              }`}
-            >
-              {currentStep > 2 ? <Check className="w-4 h-4 stroke-[3]" /> : '2'}
-            </div>
-            <span className="text-xs font-bold text-neutral-800 mt-1.5">Entrega</span>
-          </button>
-
-          {/* Step 3 */}
-          <button
-            type="button"
-            onClick={() => {
-              if (validateStep1() && validateStep2()) setCurrentStep(3);
-            }}
-            className="relative z-10 flex flex-col items-center cursor-pointer"
-          >
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                currentStep === 3 ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border-2 border-neutral-300 text-neutral-400'
-              }`}
-            >
-              3
-            </div>
-            <span className="text-xs font-bold text-neutral-800 mt-1.5">Pagamento</span>
-          </button>
+          {[
+            { step: 1, label: 'Identificação' },
+            { step: 2, label: 'Entrega' },
+            { step: 3, label: 'Pagamento' },
+          ].map((item) => {
+            const isCompleted = currentStep > item.step;
+            const isCurrent = currentStep === item.step;
+            return (
+              <div key={item.step} className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (item.step < currentStep) setCurrentStep(item.step as 1 | 2 | 3);
+                  }}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
+                    isCompleted
+                      ? 'bg-neutral-900 text-white cursor-pointer'
+                      : isCurrent
+                      ? 'bg-neutral-900 text-white ring-4 ring-neutral-900/10'
+                      : 'bg-white border-2 border-neutral-300 text-neutral-400'
+                  }`}
+                >
+                  {isCompleted ? <Check className="w-4 h-4" /> : item.step}
+                </button>
+                <span
+                  className={`text-[11px] font-semibold mt-1.5 transition-colors ${
+                    isCurrent ? 'text-neutral-900 font-bold' : 'text-neutral-500'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Main Step Screen (7 cols) */}
+        {/* Left Column: Form Steps */}
         <div className="lg:col-span-7 space-y-6">
           {/* ================= TELA 1: IDENTIFICAÇÃO ================= */}
           {currentStep === 1 && (
@@ -257,75 +210,76 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                   1
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-neutral-900 leading-tight">Dados de Contato</h2>
-                  <p className="text-xs text-neutral-500">Para onde enviaremos o código de rastreio e comprovante</p>
+                  <h2 className="text-lg font-bold text-neutral-900 leading-tight">Dados Pessoais</h2>
+                  <p className="text-xs text-neutral-500">Solicitamos apenas os dados essenciais para emissão e envio</p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-neutral-700 mb-1.5">Nome Completo *</label>
-                  <input
-                    type="text"
-                    value={customer.name}
-                    onChange={(e) => onCustomerChange({ name: e.target.value })}
-                    placeholder="Ex: Carlos Eduardo Santos"
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
-                  />
-                  {stepErrors.name && <p className="text-xs text-rose-500 mt-1">{stepErrors.name}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-neutral-700 mb-1.5">E-mail para Confirmação *</label>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">E-mail *</label>
                   <input
                     type="email"
                     value={customer.email}
                     onChange={(e) => onCustomerChange({ email: e.target.value })}
-                    placeholder="seuemail@exemplo.com"
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                    placeholder="voce@email.com"
+                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                   />
-                  {stepErrors.email && <p className="text-xs text-rose-500 mt-1">{stepErrors.email}</p>}
+                  {errors.email && <p className="text-xs text-rose-500 mt-1">{errors.email}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">Nome completo *</label>
+                  <input
+                    type="text"
+                    value={customer.name}
+                    onChange={(e) => onCustomerChange({ name: e.target.value })}
+                    placeholder="Nome e Sobrenome"
+                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
+                  />
+                  {errors.name && <p className="text-xs text-rose-500 mt-1">{errors.name}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">Celular / WhatsApp *</label>
+                    <label className="block text-xs font-semibold text-neutral-700 mb-1">WhatsApp / Celular *</label>
                     <input
                       type="text"
                       value={customer.phone}
                       onChange={(e) => onCustomerChange({ phone: formatPhone(e.target.value) })}
                       placeholder="(11) 99999-9999"
                       maxLength={15}
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                     />
-                    {stepErrors.phone && <p className="text-xs text-rose-500 mt-1">{stepErrors.phone}</p>}
+                    {errors.phone && <p className="text-xs text-rose-500 mt-1">{errors.phone}</p>}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">CPF *</label>
+                    <label className="block text-xs font-semibold text-neutral-700 mb-1">CPF *</label>
                     <input
                       type="text"
                       value={customer.cpf}
                       onChange={(e) => onCustomerChange({ cpf: formatCPF(e.target.value) })}
                       placeholder="000.000.000-00"
                       maxLength={14}
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                     />
-                    {stepErrors.cpf && <p className="text-xs text-rose-500 mt-1">{stepErrors.cpf}</p>}
+                    {errors.cpf && <p className="text-xs text-rose-500 mt-1">{errors.cpf}</p>}
                   </div>
                 </div>
+              </div>
 
-                {/* Next Step Button */}
-                <div className="pt-4">
-                  <button
-                    type="button"
-                    onClick={handleNextStep}
-                    className="w-full py-4 px-6 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
-                  >
-                    <span>Continuar para Entrega</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="pt-6 mt-6 border-t border-neutral-100 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (validateStep1()) setCurrentStep(2);
+                  }}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                >
+                  <span>Ir para Entrega</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           )}
@@ -339,16 +293,16 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900 leading-tight">Endereço de Entrega</h2>
-                  <p className="text-xs text-neutral-500">Onde você deseja receber o seu pedido</p>
+                  <p className="text-xs text-neutral-500">Onde você deseja receber o seu pedido?</p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-neutral-700 mb-1.5 flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-neutral-700 mb-1 flex items-center justify-between">
                       <span>CEP *</span>
-                      {isSearchingCep && <span className="text-[10px] text-emerald-600 animate-pulse font-semibold">Buscando CEP...</span>}
+                      {isSearchingCep && <span className="text-[10px] text-emerald-600 font-semibold animate-pulse">Buscando CEP...</span>}
                     </label>
                     <input
                       type="text"
@@ -357,126 +311,105 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                       onBlur={handleCepBlur}
                       placeholder="00000-000"
                       maxLength={9}
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                     />
-                    {stepErrors.zipCode && <p className="text-xs text-rose-500 mt-1">{stepErrors.zipCode}</p>}
+                    {errors.zipCode && <p className="text-xs text-rose-500 mt-1">{errors.zipCode}</p>}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">Número *</label>
+                    <label className="block text-xs font-semibold text-neutral-700 mb-1">Número *</label>
                     <input
                       type="text"
                       value={customer.number}
                       onChange={(e) => onCustomerChange({ number: e.target.value })}
                       placeholder="123"
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                     />
-                    {stepErrors.number && <p className="text-xs text-rose-500 mt-1">{stepErrors.number}</p>}
+                    {errors.number && <p className="text-xs text-rose-500 mt-1">{errors.number}</p>}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-neutral-700 mb-1.5">Rua / Logradouro *</label>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">Endereço / Rua *</label>
                   <input
                     type="text"
                     value={customer.street}
                     onChange={(e) => onCustomerChange({ street: e.target.value })}
-                    placeholder="Preenche sozinho pelo CEP"
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                    placeholder="Rua, Avenida..."
+                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                   />
-                  {stepErrors.street && <p className="text-xs text-rose-500 mt-1">{stepErrors.street}</p>}
+                  {errors.street && <p className="text-xs text-rose-500 mt-1">{errors.street}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">Bairro *</label>
+                    <label className="block text-xs font-semibold text-neutral-700 mb-1">Bairro *</label>
                     <input
                       type="text"
                       value={customer.neighborhood}
                       onChange={(e) => onCustomerChange({ neighborhood: e.target.value })}
                       placeholder="Bairro"
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                     />
-                    {stepErrors.neighborhood && <p className="text-xs text-rose-500 mt-1">{stepErrors.neighborhood}</p>}
+                    {errors.neighborhood && <p className="text-xs text-rose-500 mt-1">{errors.neighborhood}</p>}
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2">
-                      <label className="block text-xs font-bold text-neutral-700 mb-1.5">Cidade *</label>
+                      <label className="block text-xs font-semibold text-neutral-700 mb-1">Cidade *</label>
                       <input
                         type="text"
                         value={customer.city}
                         onChange={(e) => onCustomerChange({ city: e.target.value })}
                         placeholder="Cidade"
-                        className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                        className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-neutral-700 mb-1.5">UF *</label>
+                      <label className="block text-xs font-semibold text-neutral-700 mb-1">UF *</label>
                       <input
                         type="text"
                         value={customer.state}
                         onChange={(e) => onCustomerChange({ state: e.target.value.toUpperCase().slice(0, 2) })}
                         placeholder="SP"
                         maxLength={2}
-                        className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 text-center uppercase focus:outline-none focus:border-neutral-900"
+                        className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 text-center uppercase focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                       />
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-neutral-700 mb-1.5">Complemento (opcional)</label>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">Complemento (opcional)</label>
                   <input
                     type="text"
                     value={customer.complement || ''}
                     onChange={(e) => onCustomerChange({ complement: e.target.value })}
-                    placeholder="Apartamento, bloco..."
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900"
+                    placeholder="Apto, Bloco, Casa..."
+                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 transition-all"
                   />
                 </div>
+              </div>
 
-                {/* Opções de Frete */}
-                <div className="pt-2">
-                  <label className="block text-xs font-bold text-neutral-700 mb-2">Opção de Envio</label>
-                  <div className="p-3.5 rounded-xl border-2 border-emerald-600 bg-emerald-50/50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Truck className="w-5 h-5 text-emerald-600" />
-                      <div>
-                        <span className="font-bold text-xs text-neutral-900 block">
-                          {shippingPrice === 0 ? 'Frete Grátis Expresso' : 'Sedex Expresso com Rastreio'}
-                        </span>
-                        <span className="text-[11px] text-neutral-500">
-                          {config.shipping?.deliveryTimeEstimate || 'Prazo estimado de 2 a 5 dias úteis'}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="font-bold text-xs text-emerald-700">
-                      {shippingPrice === 0 ? 'GRÁTIS' : formatCurrency(shippingPrice)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Navigation Buttons */}
-                <div className="pt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(1)}
-                    className="py-4 px-5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-neutral-700 font-bold text-sm flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Voltar</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleNextStep}
-                    className="flex-1 py-4 px-6 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
-                  >
-                    <span>Ir para Pagamento</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="pt-6 mt-6 border-t border-neutral-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="px-5 py-3 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-neutral-700 font-bold text-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Voltar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (validateStep2()) setCurrentStep(3);
+                  }}
+                  className="px-8 py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md"
+                >
+                  <span>Ir para Pagamento</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           )}
@@ -521,7 +454,6 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                       </span>
                     )}
                   </div>
-
                   {paymentMethod === 'pix' && (
                     <div className="mx-4 mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-neutral-800 space-y-1 animate-in fade-in">
                       <p className="font-medium text-emerald-950">
@@ -553,11 +485,11 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                       <CreditCard className="w-4 h-4" />
                     </div>
                     <span className="font-bold text-sm text-neutral-900">Cartão de Crédito</span>
-                    <span className="ml-auto text-xs text-neutral-500">Até 12x</span>
+                    <span className="ml-auto text-xs text-neutral-500 font-medium">Até 12x</span>
                   </div>
 
                   {paymentMethod === 'credit_card' && (
-                    <div className="mx-4 mb-4 p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs space-y-3 animate-in fade-in">
+                    <div className="mx-4 mb-4 p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-800 space-y-3.5 animate-in fade-in">
                       <div>
                         <label className="block font-semibold text-neutral-700 mb-1">Número do cartão</label>
                         <input
@@ -580,6 +512,7 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                           placeholder="NOME COMO NO CARTÃO"
                           className="w-full px-3 py-2.5 rounded-lg border border-neutral-300 bg-white text-sm uppercase text-neutral-900 focus:outline-none focus:border-neutral-900"
                         />
+                        {errors.holderName && <p className="text-xs text-rose-500 mt-1">{errors.holderName}</p>}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -593,7 +526,9 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                             maxLength={5}
                             className="w-full px-3 py-2.5 rounded-lg border border-neutral-300 bg-white text-sm font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
                           />
+                          {errors.expiry && <p className="text-xs text-rose-500 mt-1">{errors.expiry}</p>}
                         </div>
+
                         <div>
                           <label className="block font-semibold text-neutral-700 mb-1">CVV</label>
                           <input
@@ -604,11 +539,12 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                             maxLength={4}
                             className="w-full px-3 py-2.5 rounded-lg border border-neutral-300 bg-white text-sm font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
                           />
+                          {errors.cvv && <p className="text-xs text-rose-500 mt-1">{errors.cvv}</p>}
                         </div>
                       </div>
 
                       <div>
-                        <label className="block font-semibold text-neutral-700 mb-1">Parcelas</label>
+                        <label className="block font-semibold text-neutral-700 mb-1">Parcelamento</label>
                         <select
                           value={cardInfo.installments}
                           onChange={(e) => onCardInfoChange({ installments: Number(e.target.value) })}
@@ -624,6 +560,7 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                     </div>
                   )}
                 </div>
+              </div>
 
               {/* Navigation & Submit */}
               <div className="pt-6 space-y-4">
@@ -636,7 +573,6 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                     <ArrowLeft className="w-4 h-4" />
                     <span>Voltar</span>
                   </button>
-
                   <button
                     type="button"
                     onClick={() => onSubmitOrder(paymentMethod)}
@@ -679,9 +615,15 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                   <div className="relative w-16 h-16 rounded-xl bg-neutral-900 overflow-hidden shrink-0 border border-neutral-200">
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                   </div>
+
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-xs font-bold text-neutral-900 leading-snug line-clamp-2">{item.name}</h4>
-                    <p className="text-[11px] text-neutral-500 mt-0.5">{item.size || item.variant || 'Padrão'}</p>
+                    <h4 className="text-xs font-bold text-neutral-900 leading-snug line-clamp-2">
+                      {item.name}
+                    </h4>
+                    <p className="text-[11px] text-neutral-500 mt-0.5">
+                      {item.size || item.variant || 'Padrão'}
+                    </p>
+
                     <div className="flex items-center gap-2 mt-2">
                       <div className="flex items-center border border-neutral-200 rounded-md bg-neutral-50 text-xs">
                         <button
@@ -691,7 +633,9 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="px-2 py-0.5 font-bold text-neutral-800">{item.quantity}</span>
+                        <span className="px-2 py-0.5 font-bold text-neutral-800">
+                          {item.quantity}
+                        </span>
                         <button
                           type="button"
                           onClick={() => onUpdateQuantity(item.id, 1)}
@@ -702,6 +646,7 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
                       </div>
                     </div>
                   </div>
+
                   <div className="text-right shrink-0">
                     <span className="text-xs font-bold text-neutral-900">
                       {formatCurrency(item.price * item.quantity)}
@@ -735,24 +680,27 @@ export const MultiStepCheckout: React.FC<MultiStepCheckoutProps> = ({
               </p>
             )}
 
-            {/* Subtotais */}
+            {/* Linhas de Resumo */}
             <div className="space-y-2 pt-3 border-t border-neutral-100 text-xs text-neutral-600">
               <div className="flex justify-between">
                 <span>Subtotal</span>
                 <span className="font-semibold text-neutral-900">{formatCurrency(subtotal)}</span>
               </div>
+
               {couponDiscountAmount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
                   <span>Cupom ({couponCode})</span>
                   <span>-{formatCurrency(couponDiscountAmount)}</span>
                 </div>
               )}
+
               {pixDiscountAmount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
                   <span>Desconto Pix ({pixDiscountPct}%)</span>
                   <span>-{formatCurrency(pixDiscountAmount)}</span>
                 </div>
               )}
+
               <div className="flex justify-between">
                 <span>Frete</span>
                 <span className={shippingPrice === 0 ? 'text-emerald-600 font-semibold' : 'text-neutral-900 font-semibold'}>
