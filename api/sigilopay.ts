@@ -153,3 +153,15 @@ export async function getSigiloPayTransactionStatus(id: string, customPublicKey?
   }
   return { found: false, status: 'PENDING' };
 }
+
+const activeTransactions = new Map<string, any>();
+
+export function simulateMarkAsPaid(transactionIdOrOrderId: string): boolean {
+  const record = activeTransactions.get(transactionIdOrOrderId);
+  if (record) {
+    record.status = 'PAID';
+    record.paidAt = new Date().toISOString();
+    return true;
+  }
+  return true;
+}
