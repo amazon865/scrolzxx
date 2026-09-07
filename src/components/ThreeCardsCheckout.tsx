@@ -18,7 +18,6 @@ import {
 import {
   QrCode,
   CreditCard,
-  Barcode,
   ShieldCheck,
   Lock,
   Minus,
@@ -394,7 +393,7 @@ export const ThreeCardsCheckout: React.FC<ThreeCardsCheckoutProps> = ({
               <h2 className="text-base font-bold text-neutral-900 tracking-tight">Pagamento</h2>
             </div>
 
-            {/* Radio List: Pix, Cartão, Boleto */}
+            {/* Radio List: Somente Pix e Cartão */}
             <div className="space-y-3">
               {/* Opção 1: PIX */}
               <div
@@ -429,7 +428,7 @@ export const ThreeCardsCheckout: React.FC<ThreeCardsCheckoutProps> = ({
                   )}
                 </div>
 
-                {/* Caixa informativa quando PIX selecionado (Exatamente como na foto) */}
+                {/* Caixa informativa quando PIX selecionado */}
                 {paymentMethod === 'pix' && (
                   <div className="mx-4 mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-neutral-800 space-y-1 animate-in fade-in">
                     <p className="font-medium text-emerald-950">
@@ -560,6 +559,7 @@ export const ThreeCardsCheckout: React.FC<ThreeCardsCheckoutProps> = ({
                   </div>
                 )}
               </div>
+            </div>
 
             {/* Botão Grande Verde "Comprar agora" (Exatamente como na foto) */}
             <div className="mt-6 space-y-4">
